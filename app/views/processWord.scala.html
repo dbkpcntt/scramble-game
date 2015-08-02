@@ -1,0 +1,347 @@
+@(wordForm: Form[Word]) 
+@import helper._ 
+@main("Word CRUD") {
+ 	@form(routes.Application.index()) {
+		<script type="text/javascript">
+			$(window).bind("load",function() {
+				initGame();
+			});  
+			
+			//in each game global variable
+			var seed, level, score, refreshIntervalId;
+			
+			function initGame() {
+				seed = "RANDOM";
+				level = 5;
+				score = 0;
+				
+				$("#btn-play").show();
+				$("#btn-play").focus();
+				
+				$("#ok-list").children().remove();
+				$(".btn-check").hide();
+				$("#input-word").text("");
+				$("#provided-word").text("");
+				$("#score").text(0);
+				loadHighScore();
+			}
+			
+			/*
+			* Start new game when press ENTER (or click the button)
+			* initScreen: input-word, provided-word, score, ok-list
+			* load: highscore
+			* hide: btn-play, ok-list
+			*/
+			function startNewGame() {
+				initNewGameScreen();
+				initSeedWord(level);//after seed word retun ok, it calls start new round
+			}
+			
+			function initNewGameScreen() {
+				seed = "RANDOM";
+				level = 5;
+				score = 0;
+				
+				$("#btn-play").hide();
+				
+				$("#ok-list").children().remove();
+				$(".btn-check").hide();
+				$("#input-word").text("");
+				$("#provided-word").text("");
+				$("#score").text(0);
+				loadHighScore();
+			}
+			
+			function loadHighScore() {
+				var url = "/getScores";
+				$.ajax({
+				    url : url,
+				    type: "GET",
+				    success: function(data, textStatus, jqXHR)
+				    {
+				    	var obj = jQuery.parseJSON(data);
+				    	$("#high-score-table").find("td").remove();
+						for (var x = 0; x < obj.score.length; x++) {
+							var td1 = "<td>"
+							+ obj.score[x].name
+							+ "</td>";
+							var td2 = "<td>"
+							+ obj.score[x].score
+							+ "</td>";
+							var row = "<tr>" + td1 + td2 + "</tr>";
+							$("#high-score-table").append(row);
+						}
+				    },
+				    error: function (jqXHR, textStatus, errorThrown)
+				    {
+				 		alert("There's error occured with score table");
+				    }
+				});		
+	 		}
+			
+			
+			/**
+			* Start new round.
+			* refresh: input-word
+			* reload: provide-word/seedword, timer
+			* keep: ok-list, score, highscore
+			*/
+			function startNewRound() {
+				initTimer();
+				
+				var inputWord = $("#input-word").text();
+				var providedWord = $("#provided-word").text();
+				
+				$(window).keydown(function(e) {
+					$(".btn-check").hide();
+					var ch = String.fromCharCode(e.which);
+					if (providedWord.indexOf(ch) > -1 ) {
+						inputWord += ch;
+						providedWord = providedWord.replace(ch, '');
+					}
+					if (inputWord.length > 2 && e.which == 13) { //only process 3 letters
+						var exist = false;
+						$("#ok-list span").each(function() {
+							if ($(this).text().localeCompare(inputWord) == 0) {
+								exist = true;
+								$("#btn-fail").show();
+								return false; //exit
+							}
+						});
+						if (!exist) {
+							var url = "/words";
+							$.ajax({
+							    url : url,
+							    type: "POST",
+							    data : {word: inputWord},
+							    success: function(data, textStatus, jqXHR)
+							    {
+							        if (data == '1') {
+							        	$("#btn-ok").show();
+							        	var word = '<span class="label label-success">' + inputWord + '</span>';
+							        	$('#ok-list').prepend(word);
+							        	
+							        	if (inputWord == seed) {
+							        		calculateScore(inputWord, true);
+							        		alert("YOU WON! \n THE ORIGINAL WORD: " + seed);
+							        		$('#ok-list').prepend('<hr>');
+							        		clearInterval(refreshIntervalId);
+							        		if (level == 12) { //close enough
+							        			alert("YOU ARE THE MASTER OF WORDS!!!");
+							        			endGame();
+							        		} else {
+							        			initSeedWord(++level);
+							        		}
+							        		
+							        	} else {
+							        		calculateScore(inputWord, false);
+							        	}
+
+							        } else {
+							        	$("#btn-fail").show();
+							        }
+							    },
+							    error: function (jqXHR, textStatus, errorThrown)
+							    {
+							 		alert("There's error occured");
+							    }
+							});
+						}
+					}
+					if (e.which == 8) {//backspace
+						providedWord += inputWord.charAt(inputWord.length - 1)
+						inputWord = inputWord.substring(0, inputWord.length - 1);
+					}
+					
+					$("#input-word").text(inputWord);
+					$("#provided-word").text(providedWord);
+				});
+	 		}
+			
+
+			function calculateScore(word, win) {
+				//alert(word);
+				if (win) {
+					score += word.length * 100;
+				} else {
+					score += word.length * 10;
+				}
+				$("#score").text(score);
+			}
+			
+			
+			function initTimer() {
+				var timer = 60 * (level - 4);
+				refreshIntervalId = setInterval(function () {
+					var minutes, seconds;
+			        minutes = parseInt(timer / 60, 10);
+			        seconds = parseInt(timer % 60, 10);
+			
+			        minutes = minutes < 10 ? "0" + minutes : minutes;
+			        seconds = seconds < 10 ? "0" + seconds : seconds;
+			
+			        $('#time').text(minutes + ":" + seconds);
+			
+			        if (--timer == -1) {
+			        	$(window).unbind();
+			            endGame();
+			        }
+			    }, 1000);
+			}
+			
+			function initSeedWord(len) {
+				var url = "/seedWords";
+				$.ajax({
+				    url : url,
+				    type: "POST",
+				    data : {length: len },
+				    success: function(data, textStatus, jqXHR)
+				    {
+				    	seed = data.toUpperCase(); 
+				    	//alert(seed);
+				    	var shuffled = seed.split('').sort(function(){return 0.5-Math.random()}).join('');
+				    	/* while (shuffled == seed) {//avoid displaying original word
+				    		shuffled = seed.split('').sort(function(){return 0.5-Math.random()}).join('');
+				    	} */
+
+				    	$("#input-word").text("");
+				    	$("#provided-word").text(shuffled);
+				    	//after seedword ok, start new round 
+				    	startNewRound();
+				    },
+				    error: function (jqXHR, textStatus, errorThrown)
+				    {
+				 		seed = "RANDOM";
+				    }
+				});
+			}
+			
+			
+			//END GAME 
+			function endGame() {
+	            alert("YOU'RE DONE! \n ORIGINAL WORD: " + seed +  "\n SCORE: " + score );
+	            
+	            clearInterval(refreshIntervalId);
+	     		//check and save highscore
+				var currentScore = $('#score').text();
+				var smallestScore = $("#high-score-table").find("td").last().text();
+				if (smallestScore == "") {
+					smallestScore = 0;
+				}
+
+				//alert(currentScore + " " + smallestScore);
+				if (parseInt(currentScore) > parseInt(smallestScore)) {
+					var breaker = prompt("New highscore, please enter your name", "Noname");
+					if (breaker != null) {
+						if (breaker.length > 20) {
+							breaker = breaker.substring(0, 20);
+						}
+						$.ajax({
+						    url : "/saveScore",
+						    type: "POST",
+						    data : {name: breaker, score: currentScore},
+						    success: function(data, textStatus, jqXHR)
+						    {
+						    	initGame();
+						    },
+						    error: function (jqXHR, textStatus, errorThrown)
+						    {
+						 		alert("Unable to save score");
+						    }
+						});
+					}
+				} else {
+					initGame();
+				}
+			}
+			
+			
+		</script>
+		
+	<div class="panel panel-default">
+		<div class="panel-body">
+			<fieldset>
+       			<legend>Welcome to Scramble Game</legend>
+				<div id="wrapper">
+
+					<div class="col-md-12">
+						<div class="col-md-6">
+							Rules: 
+							There's a word that be shuffled.
+							You will win each round if you find out the original word.
+							<br>
+							Hints:
+							<ul>
+								<li>
+									Find as many as possible words from the provided letters to increase score
+								</li>
+								<li>
+									Guessed word must be at least 3 characters
+								</li>
+								<li>
+									Press ENTER to submit
+								</li>
+								<li>
+									Press BACKSPACE to remove 
+								</li>
+							</ul>
+							<button id="btn-play" type="button" onclick="startNewGame()">Press Enter to play</button>
+							<br>
+							<br>
+							<div id="wrap1">
+								<div class="col-md-10">
+									<div id="input-word"></div>
+								</div>
+								<div class="col-md-2">
+									<div id="inform-button" class="pull-right">
+										<i id="btn-fail" class="glyphicon glyphicon-remove btn-check" style="color:red"></i>
+										<i id="btn-ok" class="glyphicon glyphicon-ok btn-check" style="color:green"></i>
+									</div>
+								</div>
+							</div>
+							<br>
+							<div id="wrap2">
+								<div class="col-md-12">
+									<div id="provided-word"></div>
+								</div>
+							</div>
+							<br>
+							<div id="wrap3">
+								<div id="ok-list"></div>
+							</div>
+							
+						</div>
+						
+						<div class="col-md-3">
+							<!-- Normal word: length (word) * 10
+							<br>
+							Final word: length(word) * 100 -->
+							
+							<div id="wrap4">
+								Score :
+								<span id="score">
+								</span>
+							</div>
+							
+							<div id="wrap5">
+								<span id="time">
+								</span>
+							</div>
+						</div>
+						
+						<div class="col-md-3" id="wrap6">
+							HIGH SCORES
+							<br>
+							<table id = "high-score-table"></table>
+							
+						</div>
+					</div>
+					
+					
+				</div>
+			</fieldset>
+		</div>
+	</div>
+
+	}
+}

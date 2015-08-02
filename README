@@ -1,0 +1,20 @@
+This is Simple Scamble Game Play
+===========================================
+
+Steps to run this application on your system:
+
+1. Clone repository to your system using 
+          git clone https://github.com/dbkpcntt/scramble-game.git
+          
+2. Make sure you have play 2.3.x version and installed on your system.
+
+3. Now, create a database in MySQL on your system with the script pd_game.sql
+
+4. Configure **application.conf** file in project's **conf** directory.
+
+5. Specify your database name, username and password.
+
+6. Now, run **activator run** from your terminal window (you should be in root directory of project).
+
+And, goto **http://localhost:9000** to view the output.
+
